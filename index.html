@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Elevation Profile</title>
+    <link rel="stylesheet" type="text/css" href="./style.css" />
+  </head>
+  <body>
+    <div id="map"></div>
+    <div id="elevation-chart">
+      <h1>Elevation Chart will display here.</h1>
+    </div>
+    <input
+      type="text"
+      class="controls"
+      id="origin-input"
+      placeholder="Origin"
+    />
+    <input
+      type="text"
+      class="controls"
+      id="destination-input"
+      placeholder="Destination"
+    />
+
+    <!--Change yourmapapikey with your Map api key-->
+    <script
+      src="https://maps.googleapis.com/maps/api/js?key=yourmapapikey&callback=initMap&libraries=places&v=weekly"
+      defer
+    ></script>
+    <script src="https://www.gstatic.com/charts/loader.js"></script>
+
+    <script src="script.js"></script>
+  </body>
+</html>

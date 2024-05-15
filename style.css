@@ -1,0 +1,37 @@
+#map {
+  height: 400px;
+  width: 100%;
+  /* border: 1px solid #ccc; */
+}
+
+#elevation-chart {
+  height: 200px;
+  width: 100%;
+  /* border: 1px solid #ccc; */
+  margin-top: 5px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+:root {
+  background-color: #2b3e50;
+  color: #ccc;
+}
+
+.controls {
+  background-color: #fff;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+  box-sizing: border-box;
+  font-family: Roboto;
+  font-size: 15px;
+  font-weight: 300;
+  height: 29px;
+  margin: 10px;
+  outline: none;
+  padding: 0 11px 0 13px;
+  text-overflow: ellipsis;
+  width: 240px;
+}
