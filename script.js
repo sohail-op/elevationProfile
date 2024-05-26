@@ -6,8 +6,8 @@ async function initMap() {
   let map;
   const { Map } = await google.maps.importLibrary("maps");
   map = new Map(mapElement, {
-    zoom: 13,
-    center: { lat: 20.2961, lng: 85.8245 },
+    zoom: 15,
+    center: { lat: 18.5204, lng: 73.8567 },
   });
 
   autocompleteDirectionsHandler(map);
@@ -21,6 +21,7 @@ function autocompleteDirectionsHandler(map) {
     travelMode: google.maps.TravelMode.DRIVING,
     directionsService: new google.maps.DirectionsService(),
     directionsRenderer: new google.maps.DirectionsRenderer(),
+    service: new google.maps.DistanceMatrixService(),
 
     setupPlaceChangedListener(autocomplete, mode) {
       autocomplete.bindTo("bounds", handler.map);
@@ -52,15 +53,47 @@ function autocompleteDirectionsHandler(map) {
           if (status === "OK") {
             handler.directionsRenderer.setDirections(response);
 
-            // Extract route coordinates
             const route = response.routes[0].overview_path;
-            const pathCoordinates = route.map((point) => ({
+            const totalDistance =
+              google.maps.geometry.spherical.computeLength(route);
+
+            const interpolatePoint = (path, distance) => {
+              const interpolatePath = [];
+
+              for (let i = 0; i < path.length - 1; i++) {
+                const segmentDistance =
+                  google.maps.geometry.spherical.computeDistanceBetween(
+                    path[i],
+                    path[i + 1]
+                  );
+
+                const numPoints = Math.ceil(segmentDistance / distance);
+                const numSegment = segmentDistance / distance;
+
+                for (let j = 0; j < numPoints; j++) {
+                  const fraction = j / (numSegment + 0.000000001);
+
+                  const point = google.maps.geometry.spherical.interpolate(
+                    path[i],
+                    path[i + 1],
+                    fraction
+                  );
+
+                  interpolatePath.push(point);
+                }
+              }
+              interpolatePath.push(path[path.length - 1]); //add the last point
+
+              return interpolatePath;
+            };
+            const interpolatedPoints = interpolatePoint(route, 1); // 1 meter
+
+            const interpolatedCoordinates = interpolatedPoints.map((point) => ({
               lat: point.lat(),
               lng: point.lng(),
             }));
 
-            // Get elevation for the route coordinates
-            getPathElevation(pathCoordinates);
+            getPathElevation(interpolatedCoordinates, totalDistance);
           } else {
             window.alert("Directions request failed due to " + status);
           }
@@ -70,6 +103,7 @@ function autocompleteDirectionsHandler(map) {
   };
 
   handler.directionsRenderer.setMap(map);
+
   const originInput = document.getElementById("origin-input");
   const destinationInput = document.getElementById("destination-input");
   const originAutocomplete = new google.maps.places.Autocomplete(originInput, {
@@ -88,26 +122,47 @@ function autocompleteDirectionsHandler(map) {
   return handler;
 }
 
-function getPathElevation(path) {
+function getPathElevation(path, sample) {
   const elevator = new google.maps.ElevationService();
+  const chunkSize = 500; // Adjust chunk size as needed (meters)
+  const elevations = [];
+  const sampleSet = Math.ceil(sample / chunkSize);
 
-  const request = {
-    path: path,
-    samples: 256,
-  };
+  function processChunk(chunk) {
+    const request = {
+      path: chunk.path,
+      samples: chunk.samples,
+    };
 
-  elevator.getElevationAlongPath(request, function (results, status) {
-    if (status === "OK") {
-      const elevations = [];
-      for (let i = 0; i < results.length; i++) {
-        elevations.push(results[i].elevation);
+    elevator.getElevationAlongPath(request, function (results, status) {
+      if (status === "OK") {
+        elevations.push(...results.map((result) => result.elevation));
+
+        if (request.samples < chunkSize) {
+          plotElevationChart(elevations);
+        }
+      } else {
+        console.error("Failed to get elevation for chunk:", status);
       }
-      plotElevationChart(elevations);
-    } else {
-      const chartDiv = document.getElementById("elevation-chart");
-      chartDiv.innerHTML = `<p>Unable to get elevation data</p>`;
-    }
-  });
+    });
+  }
+
+  // Loop through path coordinates in chunks
+  for (let i = 0; i < sampleSet; i++) {
+    const pathChunk =
+      sampleSet - i == 1
+        ? path.slice(i * chunkSize)
+        : path.slice(i * chunkSize, (i + 1) * chunkSize);
+    const sampleChunk = Math.min(sample, chunkSize);
+    const chunk = {
+      path: pathChunk,
+      samples: sampleChunk,
+    };
+    sample -= sampleChunk;
+
+    processChunk(chunk);
+  }
+  // plotElevationChart(elevations);
 }
 
 function plotElevationChart(elevationData) {
@@ -125,6 +180,7 @@ function plotElevationChart(elevationData) {
     var options = {
       title: "Elevation Chart",
       vAxis: { minValue: 0 },
+      // hAxis: { maxValue: 100000 },
       legend: { position: "none" },
     };
 
