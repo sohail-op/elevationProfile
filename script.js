@@ -57,10 +57,13 @@ function autocompleteDirectionsHandler(map) {
             const totalDistance =
               google.maps.geometry.spherical.computeLength(route);
 
+            // console.log("Total Distance: ", totalDistance);
+
             const interpolatePoint = (path, distance) => {
               const interpolatePath = [];
 
-              for (let i = 0; i < path.length - 1; i++) {
+              const pathLengthMinusOne = path.length - 1;
+              for (let i = 0; i < pathLengthMinusOne; i++) {
                 const segmentDistance =
                   google.maps.geometry.spherical.computeDistanceBetween(
                     path[i],
@@ -71,14 +74,13 @@ function autocompleteDirectionsHandler(map) {
                 const numSegment = segmentDistance / distance;
 
                 for (let j = 0; j < numPoints; j++) {
-                  const fraction = j / (numSegment + 0.000000001);
+                  const fraction = j / numSegment;
 
                   const point = google.maps.geometry.spherical.interpolate(
                     path[i],
                     path[i + 1],
                     fraction
                   );
-
                   interpolatePath.push(point);
                 }
               }
@@ -86,6 +88,25 @@ function autocompleteDirectionsHandler(map) {
 
               return interpolatePath;
             };
+
+            //Distance between co-ordinates
+            const disbetpoints = (points) => {
+              const distance = [0];
+              let calDistance = 0;
+
+              const pointLength = points.length - 1;
+              for (let i = 0; i < pointLength; i++) {
+                calDistance +=
+                  google.maps.geometry.spherical.computeDistanceBetween(
+                    points[i],
+                    points[i + 1]
+                  );
+
+                distance.push(calDistance);
+              }
+              return distance;
+            };
+
             const interpolatedPoints = interpolatePoint(route, 1); // 1 meter
 
             const interpolatedCoordinates = interpolatedPoints.map((point) => ({
@@ -93,7 +114,17 @@ function autocompleteDirectionsHandler(map) {
               lng: point.lng(),
             }));
 
-            getPathElevation(interpolatedCoordinates, totalDistance);
+            const interpolatedDistances = disbetpoints(interpolatedCoordinates);
+
+            const interpolatedData = {
+              path: interpolatedPoints,
+              distance: interpolatedDistances,
+            };
+
+            // console.log("Co-ordiantes: ", interpolatedCoordinates);
+            // console.log("Distance: ", interpolatedDistances);
+
+            getPathElevation(interpolatedData, totalDistance);
           } else {
             window.alert("Directions request failed due to " + status);
           }
@@ -122,16 +153,17 @@ function autocompleteDirectionsHandler(map) {
   return handler;
 }
 
-function getPathElevation(path, sample) {
+function getPathElevation(data, sample) {
+  const path = data.path;
   const elevator = new google.maps.ElevationService();
-  const chunkSize = 500; // Adjust chunk size as needed (meters)
+  const chunkSize = 500; // Adjust chunk size as needed (meters), max: 512
   const elevations = [];
   const sampleSet = Math.ceil(sample / chunkSize);
 
   function processChunk(chunk) {
     const request = {
       path: chunk.path,
-      samples: chunk.samples,
+      samples: chunk.samples, // max path can be 512
     };
 
     elevator.getElevationAlongPath(request, function (results, status) {
@@ -139,7 +171,7 @@ function getPathElevation(path, sample) {
         elevations.push(...results.map((result) => result.elevation));
 
         if (request.samples < chunkSize) {
-          plotElevationChart(elevations);
+          plotElevationChart(elevations, data.distance);
         }
       } else {
         console.error("Failed to get elevation for chunk:", status);
@@ -162,31 +194,43 @@ function getPathElevation(path, sample) {
 
     processChunk(chunk);
   }
-  // plotElevationChart(elevations);
 }
 
-function plotElevationChart(elevationData) {
-  const chartDiv = document.getElementById("elevation-chart");
+// function plotElevationChart(elevationData, distances) {
+//   // const { distances, elevations: elevationD } = elevationData;
+//   const data = [
+//     ["Distance", "Elevation"],
+//     ...distances.map((distance, index) => [distance, elevationData[index]]),
+//   ];
 
+//   console.log(data);
+// }
+
+function plotElevationChart(elevationData, distances) {
   const data = [
-    ["", "Elevation"],
-    ...elevationData.map((elevation) => ["", elevation]),
+    ["Distance", "Elevation"],
+    ...distances.map((distance, index) => [distance, elevationData[index]]),
   ];
 
   google.charts.setOnLoadCallback(drawChart);
   function drawChart() {
     var dataTable = google.visualization.arrayToDataTable(data);
+    var chartDiv = document.getElementById("elevation-chart");
 
     var options = {
       title: "Elevation Chart",
-      vAxis: { minValue: 0 },
-      // hAxis: { maxValue: 100000 },
-      legend: { position: "none" },
+      vAxis: {
+        minValue: 0,
+        title: "Elevation (m)",
+        gridlines: { color: "#FFFFFF" },
+      },
+      // curveType: "function",
+      hAxis: { title: "Distance (m)", gridlines: { color: "#FFFFFF" } },
+      legend: "none",
     };
 
     var chart = new google.visualization.AreaChart(chartDiv);
     chart.draw(dataTable, options);
   }
 }
-
 initMap();
