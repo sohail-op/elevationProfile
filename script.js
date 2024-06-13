@@ -121,8 +121,8 @@ function autocompleteDirectionsHandler(map) {
               distance: interpolatedDistances,
             };
 
-            // console.log("Co-ordiantes: ", interpolatedCoordinates);
-            // console.log("Distance: ", interpolatedDistances);
+            console.log("Co-ordiantes: ", interpolatedCoordinates);
+            console.log("Distance (in betn): ", interpolatedDistances);
 
             getPathElevation(interpolatedData, totalDistance);
           } else {
@@ -160,51 +160,76 @@ function getPathElevation(data, sample) {
   const elevations = [];
   const sampleSet = Math.ceil(sample / chunkSize);
 
-  function processChunk(chunk) {
+  var resultLength = 0;
+  var totalReqPath = 0;
+  var totalReqSample = 0;
+  var set = 1;
+
+  function processChunk(path, sample) {
+    // const request = {
+    //   path: chunk.path,
+    //   samples: chunk.sample,
+    // };
+
+    // console.log("Sample processChunk:", sample);
+
     const request = {
-      path: chunk.path,
-      samples: chunk.samples, // max path can be 512
+      path: path,
+      samples: sample,
     };
+    totalReqPath += path.length;
+    totalReqSample += sample;
 
-    elevator.getElevationAlongPath(request, function (results, status) {
-      if (status === "OK") {
-        elevations.push(...results.map((result) => result.elevation));
-
-        if (request.samples < chunkSize) {
-          plotElevationChart(elevations, data.distance);
-        }
-      } else {
+    elevator.getElevationAlongPath(request, (results, status) => {
+      if (status !== "OK") {
         console.error("Failed to get elevation for chunk:", status);
+        return;
+      }
+
+      elevations.push(...results.map((result) => result.elevation));
+      resultLength += results.length;
+      console.log("set", set++);
+      console.log("Result length e:", results.length);
+      console.log("Path length e", request.path.length);
+      console.log("Sample length e", request.samples);
+
+      if (totalReqSample == resultLength) {
+        console.log("Results length:", resultLength);
+        console.log("Elevation:", elevations);
+        console.log("Distance:", data.distance);
+        console.log("Total path length:", totalReqPath);
+        console.log("Total sample length:", totalReqSample);
+
+        plotElevationChart(elevations, data.distance);
       }
     });
   }
 
   // Loop through path coordinates in chunks
-  for (let i = 0; i < sampleSet; i++) {
-    const pathChunk =
-      sampleSet - i == 1
-        ? path.slice(i * chunkSize)
-        : path.slice(i * chunkSize, (i + 1) * chunkSize);
-    const sampleChunk = Math.min(sample, chunkSize);
-    const chunk = {
-      path: pathChunk,
-      samples: sampleChunk,
-    };
-    sample -= sampleChunk;
 
-    processChunk(chunk);
+  for (let i = 0; i < sampleSet; i++) {
+    const isLastChunk = i === sampleSet - 1;
+
+    const pathChunk = isLastChunk
+      ? path.slice(i * chunkSize)
+      : path.slice(i * chunkSize, (i + 1) * chunkSize);
+
+    const sampleChunk = isLastChunk
+      ? Math.round(sample - i * chunkSize)
+      : chunkSize;
+
+    // console.log("Sample Chunk: ", sampleChunk);
+    // console.log("Path Chunk: ", pathChunk.length);
+
+    // const chunk = {
+    //   path: pathChunk,
+    //   sample: sampleChunk,
+    // };
+
+    // processChunk(chunk);
+    processChunk(pathChunk, sampleChunk);
   }
 }
-
-// function plotElevationChart(elevationData, distances) {
-//   // const { distances, elevations: elevationD } = elevationData;
-//   const data = [
-//     ["Distance", "Elevation"],
-//     ...distances.map((distance, index) => [distance, elevationData[index]]),
-//   ];
-
-//   console.log(data);
-// }
 
 function plotElevationChart(elevationData, distances) {
   const data = [
@@ -216,6 +241,8 @@ function plotElevationChart(elevationData, distances) {
   function drawChart() {
     var dataTable = google.visualization.arrayToDataTable(data);
     var chartDiv = document.getElementById("elevation-chart");
+
+    // console.log("Data Table: ", dataTable);
 
     var options = {
       title: "Elevation Chart",
@@ -234,3 +261,13 @@ function plotElevationChart(elevationData, distances) {
   }
 }
 initMap();
+
+// function plotElevationChart(elevationData, distances) {
+//   // const { distances, elevations: elevationD } = elevationData;
+//   const data = [
+//     ["Distance", "Elevation"],
+//     ...distances.map((distance, index) => [distance, elevationData[index]]),
+//   ];
+
+//   console.log(data);
+// }
